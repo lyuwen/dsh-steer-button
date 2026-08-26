@@ -38,28 +38,23 @@ The buttons drive the **existing** Host session API directly from the browser
   Registers the buttons in `conversation.input.right`, wires the platform-aware
   shortcuts, and calls the session face from the `sessions` client service.
 
-## Install (profile patch)
+## Install
 
-1. Install the package into a profile. With pnpm available (the CLI uses it):
+This package is a **bundle**: it ships its own `cordis.patch.yml` and declares
+`dsh.bundle.patch`, so a single command installs the code **and** mounts the
+plugin row — no manual composition edit:
 
-   ```sh
-   dsh plugin --profile web add /home/lfu/git-projects/dsh-steer/packages/queue-steer-button
-   ```
+```sh
+dsh plugin --profile web add /home/lfu/git-projects/dsh-steer/packages/queue-steer-button
+```
 
-   (or manually: `cd ~/.dsh/profiles/web && pnpm add <this-directory>` /
-   `npm install <this-directory>`).
+(Without the CLI: `cd ~/.dsh/profiles/web && pnpm add <this-directory>` /
+`npm install <this-directory>` — pnpm adds the dependency, then the same
+`dsh plugin` reconcile logic promotes the `dsh.bundle`-declaring package into
+the profile's bundle layer stack.)
 
-2. Add the row to the profile's own patch layer, e.g.
-   `~/.dsh/profiles/web/cordis.patch.yml`:
-
-   ```yaml
-   - insert:
-       - id: queue-steer-button
-         name: queue-steer-button
-   ```
-
-3. Restart the profile. `dsh.client` package metadata is cached per name, so
-   plugin-set changes take effect only on restart.
+Then restart the profile: `dsh.client` package metadata is cached per name, so
+plugin-set changes take effect only on restart.
 
 ## Verify
 

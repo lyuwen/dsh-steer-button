@@ -1,0 +1,8 @@
+# queue-steer-button bundle patch: mounts the plugin row for this package.
+# Because the package declares `dsh.bundle.patch`, `dsh plugin --profile <name>
+# add queue-steer-button` reconciles it into the profile's bundle layer stack
+# automatically — the row below activates without any manual composition edit.
+
+- insert:
+    - id: queue-steer-button
+      name: queue-steer-button
