@@ -27,7 +27,13 @@ The buttons drive the **existing** Host session API directly from the browser
   same delivery then continues with the new request.
 
 (Note: the shipped Settings "queue" mode means *wait for the whole turn*
-(`followup`), which is not what these buttons do.)
+(`followup`, next-turn inbox) — not what these buttons do. DSH's own "steer"
+— the busy-enter "steer" preference and the queue row's Steer action — is
+exactly the plugin's **Queue**: the same non-interrupting `agent.steer`
+next-step delivery, waiting only for the current step to finish and sending
+with that step's observation. The plugin's **Steer** is the only interrupting
+option among the four (DSH queue, DSH steer, Queue, Steer): it aborts the
+current LLM stream and delivers immediately.)
 
 ## Package layout
 
