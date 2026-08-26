@@ -31,12 +31,16 @@ The buttons drive the **existing** Host session API directly from the browser
 
 ## Package layout
 
+- `package.json` — declares `dsh.bundle.patch` (self-installing bundle) and
+  `dsh.client` (browser half, `platform: "web"`); exports map with `types`.
+- `cordis.patch.yml` — the bundle patch that inserts the plugin row.
 - `lib/index.js` — host half. Pure UI plugin; the empty `apply` exists so the
-  row mounts in the host Loader. The browser half is discovered through the
-  package.json `dsh.client` declaration.
+  row mounts in the host Loader.
 - `lib/client.js` — browser half (`window.__ModuleLoader__.load` bundle).
   Registers the buttons in `conversation.input.right`, wires the platform-aware
   shortcuts, and calls the session face from the `sessions` client service.
+- `lib/types/*.d.ts` — hand-written declarations.
+- `LICENSE` — MIT.
 
 ## Install
 
@@ -55,6 +59,18 @@ the profile's bundle layer stack.)
 
 Then restart the profile: `dsh.client` package metadata is cached per name, so
 plugin-set changes take effect only on restart.
+
+### Current deployment state
+
+Already installed into the local `web` profile (dependency + bundle layer in
+`~/.dsh/profiles/web/package.json`, package at
+`~/.dsh/profiles/node_modules/queue-steer-button/`). A profile restart is the
+remaining step to activate it. After editing `lib/*` or `package.json`, re-sync
+the installed copy:
+
+```sh
+cp -r packages/queue-steer-button/. ~/.dsh/profiles/node_modules/queue-steer-button/
+```
 
 ## Verify
 
