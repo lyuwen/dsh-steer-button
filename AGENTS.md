@@ -20,26 +20,35 @@ repository, by agents and humans alike.
 
 ## Project layout
 
-- `packages/queue-steer-button/` — the DSH plugin package, shaped after the
-  shipped `@deepseek-ai/dsh-*` packages:
-  - `package.json` — declares `dsh.bundle.patch` (self-installing bundle:
-    `dsh plugin --profile <name> add <path>` installs the code **and** mounts
-    the plugin row) and `dsh.client` (browser half, `platform: "web"`).
-  - `cordis.patch.yml` — the bundle patch that inserts the plugin row.
-  - `lib/index.js` — host half (empty `apply`; pure UI plugin so the row
-    mounts in the host Loader).
-  - `lib/client.js` — browser half (`window.__ModuleLoader__.load` bundle;
-    this is the source, not a build artifact — the bundle is hand-written).
-  - `lib/types/*.d.ts` — hand-written declarations referenced by the exports
-    map.
-  - `LICENSE` — MIT.
+The repository root **is** the plugin package (`queue-steer-button`) — a
+requirement for git-URL installs, since pnpm installs a git dependency from
+the repo's root `package.json`. Shaped after the shipped `@deepseek-ai/dsh-*`
+packages:
+
+- `package.json` — declares `dsh.bundle.patch` (self-installing bundle:
+  `dsh plugin --profile <name> add <path-or-git-url>` installs the code
+  **and** mounts the plugin row) and `dsh.client` (browser half,
+  `platform: "web"`).
+- `cordis.patch.yml` — the bundle patch that inserts the plugin row.
+- `lib/index.js` — host half (empty `apply`; pure UI plugin so the row
+  mounts in the host Loader).
+- `lib/client.js` — browser half (`window.__ModuleLoader__.load` bundle;
+  this is the source, not a build artifact — the bundle is hand-written).
+- `lib/types/*.d.ts` — hand-written declarations referenced by the exports
+  map.
+- `LICENSE` — MIT.
+- `AGENTS.md`, `README.md` — repo docs.
 
 ## Iterating on the plugin
 
-- Edit `packages/queue-steer-button/lib/*` and `package.json`, then re-sync
-  the installed copy under `~/.dsh/profiles/node_modules/queue-steer-button/`
+- Edit `lib/*` and `package.json` at the repo root, then re-sync the
+  installed copy under `~/.dsh/profiles/node_modules/queue-steer-button/`
   (a profile restart is required for changes to apply — `dsh.client` package
   metadata is cached per name and plugin-set changes take effect on restart).
+- The canonical install path is the git URL
+  `git+https://github.com/lyuwen/dsh-steer-button` (repo root is the package);
+  a local path install (`dsh plugin --profile web add <repo-root>`) works the
+  same way.
 - **Do not regress the semantics**:
   - Queue → `session.prompt([…], "steer")` — next-step delivery after the
     observation, sent together for the next assistant message; nothing is
