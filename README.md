@@ -35,12 +35,12 @@ Every still-pending message renders in a strip above the composer card:
 - **turn end** rows are Backlog messages waiting for the whole turn — their
   **Send** button delivers them with the next agent step instead.
 
-Each row offers:
+Each row offers icon buttons (with tooltips):
 
-- **Edit** — moves the text back into the text box (removing it from the
-  queue) for free-form editing; press `Enter` to re-queue the edited text.
-- **Remove** — drops the message without sending it.
-- **Send** (backlog rows only) — deliver now with the next agent step.
+- **Edit** (pencil) — moves the text back into the text box (removing it from
+  the queue) for free-form editing; press `Enter` to re-queue the edited text.
+- **Remove** (trash) — drops the message without sending it.
+- **Send** (arrow, backlog rows only) — deliver now with the next agent step.
 
 With the cursor in the text box, pressing **↑** (Up) pulls the most recently
 queued message back into the composer for editing. Editing always happens in
