@@ -9,18 +9,18 @@ strip above the text box.
 |---|---|---|---|
 | **Queue** | `Enter` | `session.prompt([…], "steer")` | **Next agent step**: the current step finishes and commits its observation, then the message is sent **together with that observation** in the next LLM request. Nothing is interrupted. |
 | **Steer** | `⌘+Return` / `Ctrl+Enter` | `session.cancel()` then `session.prompt([…], "steer")` | The current step's LLM stream aborts; the partial output is preserved as an **interrupted assistant message**; the new request continues with your message. |
-| **Backlog** | `⇧+Return` / `Shift+Enter` | `session.prompt([…], "queue")` | DSH's **native queue**: waits for the whole turn to finish, then runs as its own turn. |
+| **Backlog** | `⌘+⇧+Return` / `Ctrl+Shift+Enter` | `session.prompt([…], "queue")` | DSH's **native queue**: waits for the whole turn to finish, then runs as its own turn. |
 
 The three controls replace the shipped behavior while the agent is busy:
 
 - plain **Enter** is the plugin's Queue (next-step delivery) instead of the
   native busy-enter queue (whole-turn backlog) — the delivered text stays
   editable in the queue strip until the next step boundary;
-- **Shift+Enter**, which natively inserted a newline, now sends to the
-  backlog (newlines are unavailable while the agent is running);
-- **⌘/Ctrl+Enter** is the plugin's Steer instead of the native accelerated
-  send. With an empty draft it falls through to the native gesture that
-  steers all pending backlog rows into the running turn.
+- **Shift+Enter keeps its native newline role** in the text box;
+- **⌘/Ctrl+⇧+Enter** sends to the backlog; **⌘/Ctrl+Enter** is the plugin's
+  Steer instead of the native accelerated send. With an empty draft
+  ⌘/Ctrl+Enter falls through to the native gesture that steers all pending
+  backlog rows into the running turn.
 
 Buttons are hidden while the agent is idle, in a blank/new chat, or in a
 removed session; slash-command drafts (`/…`) and an open trigger menu keep
@@ -137,5 +137,5 @@ Start a slow task. While it runs:
   the box; edit it and press **Enter** again to re-queue.
 - Press **⌘+Return / Ctrl+Enter** — the current step stops, its partial
   output stays visible, and the agent answers your message.
-- Press **⇧+Return / Shift+Enter** — the message waits as a **turn end**
+- Press **⌘+⇧+Return / Ctrl+Shift+Enter** — the message waits as a **turn end**
   row; its **Send** button delivers it with the next agent step.

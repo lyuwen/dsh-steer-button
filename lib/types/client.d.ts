@@ -12,8 +12,9 @@ import type { Context } from '@deepseek-ai/cordis';
  * - Steer (⌘/Ctrl+Enter) → session.cancel() then session.prompt([…], "steer"):
  *   the current step's LLM stream aborts (partial output preserved as an
  *   interrupted assistant message), then the new request continues.
- * - Backlog (Shift+Enter) → session.prompt([…], "queue"): DSH's native queue —
- *   waits for the whole turn to finish.
+ * - Backlog (⌘/Ctrl+Shift+Enter) → session.prompt([…], "queue"): DSH's native
+ *   queue — waits for the whole turn to finish. Shift+Enter keeps its native
+ *   newline role in the text box.
  *
  * Pending messages render in a queue strip above the composer (the shipped
  * dock and pending-steering tail bubbles are hidden). The composer Up arrow
