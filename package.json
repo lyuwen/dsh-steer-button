@@ -1,7 +1,7 @@
 {
 	"name": "queue-steer-button",
 	"description": "Queue / Steer / Backlog composer controls for DeepSeek Harness, overriding the running-session input: Enter queues into the next agent step (next-step delivery after the observation), ⌘/Ctrl+Enter steers (aborts the current thinking step, keeps the partial output, continues with the new request), and ⌘/Ctrl+Shift+Enter sends to the backlog (DSH's native whole-turn queue). Pending messages render in a queue strip above the composer and can be pulled back into the text box for free-form editing.",
-	"version": "0.3.1",
+	"version": "0.3.2",
 	"private": true,
 	"type": "module",
 	"main": "lib/index.js",
