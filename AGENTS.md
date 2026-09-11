@@ -68,8 +68,18 @@ packages:
   - Steer → `session.cancel()` then `session.prompt([…], "steer")` — the
     current step's LLM stream aborts, the partial output is preserved as an
     interrupted assistant message, then the new request continues.
+  - Escape → promotes every `queued` row to next-step delivery
+    (`updateQueue(id, { kind: "steer" })`, the native queue dock's Steer) and
+    then calls `session.cancel()`. Promotion comes first on purpose: steering
+    is only accepted while the agent is steerable, and the cancel closes that
+    window. `session/steer-unavailable` and `session/queue-item-not-found`
+    converge silently, exactly like the native accelerated-Enter steer.
 - **Do not regress the UI contract**: buttons render only while the agent is
   running in the session (hidden in blank/new chats and removed sessions);
   shortcuts are platform-aware — ⌘+Return / ⌘+⇧+Return on macOS,
   Ctrl+Enter / Ctrl+Shift+Enter elsewhere. Plain Enter keeps the shipped
-  busy-enter setting untouched.
+  busy-enter setting untouched. Escape acts only on the Session the workspace
+  shows (`SessionListState.current`), never on a background Session, and yields
+  to an open menu/dialog/popup or a form field outside the composer — it is a
+  bubble-phase handler that respects `defaultPrevented`, unlike the Enter
+  chords.

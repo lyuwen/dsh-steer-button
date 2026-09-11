@@ -135,6 +135,14 @@ function interfaceBody(text, name) {
 	return end === -1 ? text.slice(start) : text.slice(start, end);
 }
 
+/** One `type X = …;` declaration body, up to the next top-level export. */
+function typeAliasBody(text, name) {
+	const start = text.indexOf(`type ${name} =`);
+	if (start === -1) return "";
+	const end = text.indexOf("\nexport ", start);
+	return end === -1 ? text.slice(start) : text.slice(start, end);
+}
+
 /** One `'slot.key': { ... }` entry from the slot map, or "" when absent. */
 function slotEntry(text, key) {
 	const start = text.indexOf(`'${key}': {`);
@@ -157,17 +165,17 @@ test("the actions entry reads Session/Input the way that slot supplies them", { 
 	// renderSlot(key, {}); the standard props (useSession/useInput) are then the
 	// only source. A DSH that still passes the owner must keep working too.
 	if (/owner\s*:/.test(right)) {
-		assert.match(source, /props\.session/, "this DSH still supplies the slot owner; the owner fallback is gone");
-		assert.match(source, /props\.input/, "this DSH still supplies the slot owner; the owner fallback is gone");
+		assert.match(source, /props\.session\b/, "this DSH still supplies the slot owner; the owner fallback is gone");
+		assert.match(source, /props\.input\b/, "this DSH still supplies the slot owner; the owner fallback is gone");
 	} else {
-		assert.match(source, /props\.useSession/, "slot owner is gone, so the component must read useSession");
-		assert.match(source, /props\.useInput/, "slot owner is gone, so the component must read useInput");
+		assert.match(source, /props\.useSession\b/, "slot owner is gone, so the component must read useSession");
+		assert.match(source, /props\.useInput\b/, "slot owner is gone, so the component must read useInput");
 	}
 });
 
 test("the queue strip is still fed by the slot that owns its composer", { skip }, () => {
 	assert.match(source, /updateQueue/);
-	assert.match(source, /props\.session/);
+	assert.match(source, /props\.session\b/);
 	assert.notEqual(slotEntry(conversationTypes(), "conversation.input.dock"), "");
 });
 
@@ -215,4 +223,22 @@ test("queue rows still project the fields the strip renders", { skip }, () => {
 		assert.match(source, new RegExp(`\\b${field}\\b`), `the strip no longer reads ${field}`);
 	}
 	assert.match(row, /'queued' \| 'steering'/, "the queue placements changed; the strip filters queued/steering");
+});
+
+test("the escape path still has the queue verbs and focus feed it needs", { skip }, () => {
+	const types = sessionTypes();
+	// Escape promotes `queued` rows to next-step delivery (kind 'steer') and the
+	// strip's Edit/Remove use kind 'remove'; both are mutations of one item.
+	const action = typeAliasBody(types, "QueueAction");
+	assert.notEqual(action, "", "QueueAction is no longer declared in the session controller contract");
+	assert.match(action, /kind: 'steer'/, "QueueAction no longer accepts kind 'steer'; Escape cannot promote backlog rows");
+	assert.match(action, /kind: 'remove'/, "QueueAction no longer accepts kind 'remove'");
+	assert.match(source, /kind: "steer"/, "the plugin no longer promotes queue rows");
+	assert.match(source, /kind: "remove"/, "the plugin no longer removes queue rows");
+	// Escape must act on the Session the workspace shows, and its `current` id is
+	// the only client-side source for that.
+	const list = interfaceBody(types, "SessionListState");
+	assert.notEqual(list, "", "SessionListState is no longer declared in the session controller contract");
+	assert.match(list, /\bcurrent\b/, "SessionListState no longer exposes current; the focus guard cannot tell background Sessions apart");
+	assert.match(source, /props\.useSessions\b/, "the escape guard no longer reads the current Session");
 });

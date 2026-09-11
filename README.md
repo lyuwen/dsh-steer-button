@@ -10,8 +10,9 @@ strip above the text box.
 | **Queue** | `Enter` | `session.prompt([…], "steer")` | **Next agent step**: the current step finishes and commits its observation, then the message is sent **together with that observation** in the next LLM request. Nothing is interrupted. |
 | **Steer** | `⌘+Return` / `Ctrl+Enter` | `session.cancel()` then `session.prompt([…], "steer")` | The current step's LLM stream aborts; the partial output is preserved as an **interrupted assistant message**; the new request continues with your message. |
 | **Backlog** | `⌘+⇧+Return` / `Ctrl+Shift+Enter` | `session.prompt([…], "queue")` | DSH's **native queue**: waits for the whole turn to finish, then runs as its own turn. |
+| **Stop** | `Esc` | `session.cancel()` (plus a promotion per backlog row) | Stops the running agent — and if backlog rows are pending, promotes them to next-step delivery first, so they enter the context immediately and the turn continues with them. |
 
-The three controls replace the shipped behavior while the agent is busy:
+The controls replace the shipped behavior while the agent is busy:
 
 - plain **Enter** is the plugin's Queue (next-step delivery) instead of the
   native busy-enter queue (whole-turn backlog) — the delivered text stays
@@ -25,6 +26,28 @@ The three controls replace the shipped behavior while the agent is busy:
 Buttons are hidden while the agent is idle, in a blank/new chat, or in a
 removed session; slash-command drafts (`/…`) and an open trigger menu keep
 native adjudication.
+
+### Escape
+
+`Esc` is the composer's Stop button, with the queue folded in. It acts on the
+**Session the workspace is showing** — a background Session's running turn is
+never touched — and only while that Session is running. The composer draft is
+never submitted by `Esc`.
+
+| Pending queue | What `Esc` does |
+|---|---|
+| no `turn end` rows | `session.cancel()` — the same call the Stop button makes |
+| one or more `turn end` rows | each row is promoted to next-step delivery (`updateQueue(id, {kind: "steer"})`, the native queue dock's Steer), **then** the current step is cancelled, so the messages enter the context immediately and the turn continues with them |
+
+Rows already marked **next step** need no promotion; `Esc` simply stops, which
+delivers them at the next boundary. Promotion happens before the cancel on
+purpose: steering is only accepted while the agent is steerable, and the cancel
+closes that window.
+
+`Esc` is deliberately polite about it: an open trigger menu, popup, inline
+editor, or dialog owns the key first, and a form field outside the composer
+keeps it for itself. That is why the handler runs in the bubble phase and
+checks `defaultPrevented` rather than intercepting like the Enter chords.
 
 ## The queue strip
 
@@ -111,7 +134,9 @@ did):
 | `useSession` / `useInput` standard slot props | Session lifecycle and draft state; `0.1.5` dropped the `InputZone` owner from the actions slot |
 | `InputState.draft` / `.phase` / `.attachmentIds` | what gates the three actions; `imageIds` was renamed in `0.1.5` and is still read as a fallback |
 | `[data-composer-card]`, `[data-composer-input]` | the composer card and its editor host; the editor was a `textarea` before `0.1.5` |
-| `SessionFace.prompt` / `.cancel` / `.updateQueue` | the three delivery modes and the strip row actions |
+| `SessionFace.prompt` / `.cancel` / `.updateQueue` | the three delivery modes, the `Esc` stop, and the strip row actions |
+| `QueueAction` kinds `steer` / `remove` | `Esc` promoting backlog rows, and the strip row actions |
+| `SessionListState.current` | `Esc` acting only on the Session the workspace shows |
 | `QueuedMessage.placement` / `.preview` / `.text` | the strip rows (`queued` = turn end, `steering` = next step) |
 
 DSH client packages are supplied by the host at runtime, so none of them is
@@ -190,3 +215,7 @@ Start a slow task. While it runs:
   output stays visible, and the agent answers your message.
 - Press **⌘+⇧+Return / Ctrl+Shift+Enter** — the message waits as a **turn end**
   row; its **Send** button delivers it with the next agent step.
+- Press **Esc** — the agent stops. Queue one or more messages first and `Esc`
+  promotes them to **next step** rows and stops in the same gesture, so the
+  turn continues with them; press it while another session is on screen and
+  nothing happens to this one.
