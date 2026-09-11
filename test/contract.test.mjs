@@ -12,17 +12,19 @@
  * lib/client.js must still consume the shape the DSH provides it in.
  *
  * Usage:
- *   npm test                                  # auto-detect the installed DSH
- *   DSH_ROOT=/path/to/@deepseek-ai/dsh npm test
- *   node test/matrix.mjs 0.1.4 0.1.5-rc.1     # same checks across versions
+ *   npm test                                        # auto-detect the installed DSH
+ *   DSH_ROOT=/path/to/@deepseek-ai/dsh npm test     # test an explicit DSH
+ *   node tools/dsh-matrix.mjs 0.1.4 0.1.5-rc.1      # the same checks across versions
  *
- * A DSH root is the directory holding the `@deepseek-ai/dsh` package (the one
- * whose `node_modules/@deepseek-ai/*` carries the client packages).
+ * A DSH root is the `@deepseek-ai/dsh` package directory. The client packages
+ * it composes are resolved through Node from inside it, so both npm's hoisted
+ * layout and pnpm's virtual store work.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -41,16 +43,14 @@ function findDshRoot() {
 	if (home !== undefined && home !== "") {
 		const profiles = join(home, "profiles");
 		if (existsSync(profiles)) {
-			for (const entry of readdirSync(profiles)) {
-				candidates.push(join(profiles, entry, "node_modules/@deepseek-ai/dsh"));
-			}
+			for (const entry of readdirSync(profiles)) candidates.push(join(profiles, entry, "node_modules/@deepseek-ai/dsh"));
 		}
 	}
 	try {
 		const globalRoot = execFileSync("npm", ["root", "-g"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
 		if (globalRoot !== "") candidates.push(join(globalRoot, "@deepseek-ai/dsh"));
 	} catch {
-		// No npm on PATH: the explicit/profile candidates are all we have.
+		// No npm on PATH: the explicit and profile candidates are all we have.
 	}
 	return candidates.find((candidate) => existsSync(candidate));
 }
@@ -58,11 +58,52 @@ function findDshRoot() {
 const dshRoot = findDshRoot();
 const skip = dshRoot === undefined ? "no DSH install found; set DSH_ROOT to the @deepseek-ai/dsh package directory" : false;
 
-/** Directory of one bundled client package inside the DSH install. */
+/**
+ * Directory of one client package the DSH composes.
+ *
+ * Resolution is deliberately layout-tolerant. npm hoists the whole tree, so the
+ * package is usually reachable from the DSH root; pnpm links only each
+ * package's own dependencies, and the client packages arrive through the web
+ * bundle, so there they exist only inside the virtual store.
+ */
 function packageDir(name) {
-	const dir = join(dshRoot, "node_modules/@deepseek-ai", name);
-	assert.ok(existsSync(dir), `DSH ${dshRoot} does not bundle @deepseek-ai/${name}`);
-	return dir;
+	const specifier = `@deepseek-ai/${name}`;
+	if (dshRoot === undefined) return undefined;
+	const has = (dir) => existsSync(join(dir, "package.json"));
+	const resolve = createRequire(join(dshRoot, "package.json"));
+	for (const candidate of [`${specifier}/package.json`, specifier]) {
+		let entry;
+		try {
+			entry = resolve.resolve(candidate);
+		} catch {
+			continue;
+		}
+		// A package.json hit is already the package root; a main-entry hit is
+		// somewhere inside it, so walk up to the manifest that names it.
+		for (let dir = dirname(entry); ; dir = dirname(dir)) {
+			if (has(dir) && JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).name === specifier) return dir;
+			if (dirname(dir) === dir) break;
+		}
+	}
+	// pnpm: <node_modules>/@deepseek-ai/<name> is empty or absent, while
+	// <node_modules>/.pnpm/<name>@<version>[_peers]/node_modules/ holds it.
+	for (let dir = dshRoot; ; dir = dirname(dir)) {
+		const modules = join(dir, "node_modules");
+		if (existsSync(modules)) {
+			const flat = join(modules, specifier);
+			if (has(flat)) return flat;
+			const virtual = join(modules, ".pnpm");
+			if (existsSync(virtual)) {
+				for (const entry of readdirSync(virtual)) {
+					if (!entry.startsWith(`${name}@`) && !entry.includes(`+${name}@`)) continue;
+					const stored = join(virtual, entry, "node_modules", specifier);
+					if (has(stored)) return stored;
+				}
+			}
+		}
+		if (dirname(dir) === dir) break;
+	}
+	assert.fail(`DSH ${dshRoot} does not bundle ${specifier}: this DSH line predates it, or the package was renamed`);
 }
 
 /** Read every declaration file under a package (paths move between releases). */
@@ -83,6 +124,9 @@ function clientBundle(name) {
 	return readFileSync(path, "utf8");
 }
 
+const conversationTypes = () => typeText("dsh-client-ui-conversation");
+const sessionTypes = () => typeText("dsh-api-session-controller");
+
 /** One `interface X { ... }` body from a declaration text, or "" when absent. */
 function interfaceBody(text, name) {
 	const start = text.indexOf(`interface ${name} {`);
@@ -99,23 +143,19 @@ function slotEntry(text, key) {
 	return end === -1 ? text.slice(start) : text.slice(start, end);
 }
 
-const conversationTypes = dshRoot === undefined ? "" : typeText("dsh-client-ui-conversation");
-const sessionTypes = dshRoot === undefined ? "" : typeText("dsh-api-session-controller");
-
 test("the composer controls still have a slot to render in", { skip }, () => {
-	const right = slotEntry(conversationTypes, "conversation.input.right");
-	assert.notEqual(right, "", "@deepseek-ai/dsh-client-ui-conversation no longer declares conversation.input.right");
-	const dock = slotEntry(conversationTypes, "conversation.input.dock");
-	assert.notEqual(dock, "", "@deepseek-ai/dsh-client-ui-conversation no longer declares conversation.input.dock");
+	const types = conversationTypes();
+	assert.notEqual(slotEntry(types, "conversation.input.right"), "", "conversation.input.right is no longer declared");
+	assert.notEqual(slotEntry(types, "conversation.input.dock"), "", "conversation.input.dock is no longer declared");
 	assert.match(source, /conversation\.input\.right/);
 	assert.match(source, /conversation\.input\.dock/);
 });
 
 test("the actions entry reads Session/Input the way that slot supplies them", { skip }, () => {
-	const right = slotEntry(conversationTypes, "conversation.input.right");
+	const right = slotEntry(conversationTypes(), "conversation.input.right");
 	// DSH 0.1.5 dropped the InputZone owner from this slot and renders it as
 	// renderSlot(key, {}); the standard props (useSession/useInput) are then the
-	// only source. A build that still passes the owner must keep working too.
+	// only source. A DSH that still passes the owner must keep working too.
 	if (/owner\s*:/.test(right)) {
 		assert.match(source, /props\.session/, "this DSH still supplies the slot owner; the owner fallback is gone");
 		assert.match(source, /props\.input/, "this DSH still supplies the slot owner; the owner fallback is gone");
@@ -126,28 +166,22 @@ test("the actions entry reads Session/Input the way that slot supplies them", { 
 });
 
 test("the queue strip is still fed by the slot that owns its composer", { skip }, () => {
-	const dock = slotEntry(conversationTypes, "conversation.input.dock");
-	// The strip resolves its Session through the same helper as the buttons, so
-	// this slot is allowed to keep its owner but not to require it.
 	assert.match(source, /updateQueue/);
 	assert.match(source, /props\.session/);
-	assert.notEqual(dock, "");
+	assert.notEqual(slotEntry(conversationTypes(), "conversation.input.dock"), "");
 });
 
 test("InputState still projects the draft the controls gate on", { skip }, () => {
-	const input = interfaceBody(conversationTypes, "InputState");
+	const input = interfaceBody(conversationTypes(), "InputState");
 	assert.notEqual(input, "", "InputState is no longer declared in the conversation contract");
 	for (const field of ["draft", "phase"]) {
 		assert.match(input, new RegExp(`\\b${field}\\b`), `InputState no longer exposes ${field}`);
-		assert.match(source, new RegExp(`input\\?\\.${field}|\\b${field}\\b`));
+		assert.match(source, new RegExp(`input\\?\\.${field}`), `the controls no longer read input.${field}`);
 	}
 	// Attachments moved from imageIds to attachmentIds (now files and images).
-	assert.ok(
-		/\battachmentIds\b/.test(input) || /\bimageIds\b/.test(input),
-		"InputState exposes neither attachmentIds nor imageIds; the attachment guard cannot work"
-	);
-	if (/\battachmentIds\b/.test(input)) assert.match(source, /attachmentIds/, "DSH exposes attachmentIds but the plugin never reads it");
-	if (/\bimageIds\b/.test(input)) assert.match(source, /imageIds/, "DSH exposes imageIds but the plugin never reads it");
+	const attachmentField = /\battachmentIds\b/.test(input) ? "attachmentIds" : /\bimageIds\b/.test(input) ? "imageIds" : undefined;
+	assert.notEqual(attachmentField, undefined, "InputState exposes neither attachmentIds nor imageIds; the attachment guard cannot work");
+	assert.match(source, new RegExp(attachmentField), `DSH exposes ${attachmentField} but the plugin never reads it`);
 });
 
 test("the composer card still carries the DOM markers the strip binds to", { skip }, () => {
@@ -164,7 +198,7 @@ test("the composer card still carries the DOM markers the strip binds to", { ski
 });
 
 test("the session face still exposes the verbs the three modes drive", { skip }, () => {
-	const session = interfaceBody(sessionTypes, "ISession");
+	const session = interfaceBody(sessionTypes(), "ISession");
 	assert.notEqual(session, "", "ISession is no longer declared in the session controller contract");
 	for (const verb of ["prompt(", "cancel(", "updateQueue("]) {
 		assert.ok(session.includes(verb), `ISession no longer exposes ${verb}`);
@@ -174,7 +208,7 @@ test("the session face still exposes the verbs the three modes drive", { skip },
 });
 
 test("queue rows still project the fields the strip renders", { skip }, () => {
-	const row = interfaceBody(sessionTypes, "QueuedMessage");
+	const row = interfaceBody(sessionTypes(), "QueuedMessage");
 	assert.notEqual(row, "", "QueuedMessage is no longer declared in the session controller contract");
 	for (const field of ["placement", "preview", "text"]) {
 		assert.match(row, new RegExp(`\\b${field}\\b`), `QueuedMessage no longer projects ${field}`);

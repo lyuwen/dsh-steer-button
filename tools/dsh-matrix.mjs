@@ -27,22 +27,32 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const [versions, roots] = parseArgs(process.argv.slice(2));
 
 if (versions.length === 0 && roots.length === 0) {
-	console.error("usage: node test/matrix.mjs <dsh-version>... | --root <dsh-root>...");
+	console.error("usage: node tools/dsh-matrix.mjs <dsh-version>... | --root <dsh-root>...");
 	process.exit(2);
 }
 
 const targets = roots.map((root) => ({ label: root, root }));
 const tempDirs = [];
+let installFailures = 0;
 for (const version of versions) {
 	const dir = mkdtempSync(join(tmpdir(), "qsb-matrix-"));
 	tempDirs.push(dir);
 	writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "qsb-matrix", private: true }));
 	process.stdout.write(`installing @deepseek-ai/dsh@${version} … `);
 	try {
-		execFileSync("pnpm", ["add", "--silent", `@deepseek-ai/dsh@${version}`], { cwd: dir, stdio: ["ignore", "ignore", "pipe"] });
+		// --ignore-scripts: the DSH tree carries native packages (node-pty,
+		// koffi) whose blocked build scripts make pnpm exit non-zero *before* it
+		// finishes linking, which leaves an unusable tree. Nothing here needs
+		// them built — the checks only read JS and type declarations.
+		execFileSync("pnpm", ["add", "--ignore-scripts", `@deepseek-ai/dsh@${version}`], { cwd: dir, stdio: ["ignore", "ignore", "pipe"] });
 		console.log("ok");
 	} catch (error) {
-		console.log(`failed (${error.status ?? "?"}); skipping`);
+		installFailures += 1;
+		console.log(`failed (exit ${error.status ?? "?"})`);
+		// pnpm's own diagnosis, which is usually an environment problem (store
+		// directory, network, registry) rather than a verdict about the plugin.
+		const detail = `${error.stderr ?? ""}`.trim().split("\n").slice(0, 3).join("\n        ");
+		if (detail !== "") console.log(`        ${detail}`);
 		continue;
 	}
 	targets.push({ label: `dsh ${version}`, root: join(dir, "node_modules/@deepseek-ai/dsh") });
@@ -50,9 +60,8 @@ for (const version of versions) {
 
 const results = [];
 for (const target of targets) {
-	const output = runContract(target.root);
-	const failures = output.split("\n").filter((line) => line.startsWith("not ok")).map((line) => line.replace(/^not ok \d+ - /, ""));
-	results.push({ ...target, ok: failures.length === 0, failures });
+	const failures = contractFailures(runContract(target.root));
+	results.push({ ...target, failures, ok: failures.length === 0 });
 }
 
 rmSyncTempDirs();
@@ -64,6 +73,12 @@ for (const result of results) {
 }
 const failed = results.filter((result) => !result.ok).length;
 console.log(`\n${results.length - failed}/${results.length} target(s) match this plugin.`);
+// Nothing checked is not success: an install that never happened must not read
+// as "this plugin matches nothing".
+if (results.length === 0) {
+	console.error(`${installFailures} install(s) failed and no target was checked.`);
+	process.exit(2);
+}
 process.exit(failed === 0 ? 0 : 1);
 
 function parseArgs(args) {
@@ -93,6 +108,21 @@ function runContract(root) {
 	} catch (error) {
 		return `${error.stdout ?? ""}${error.stderr ?? ""}`;
 	}
+}
+
+/** Failing test names with the assertion that broke, from TAP output. */
+function contractFailures(output) {
+	const lines = output.split("\n");
+	const failures = [];
+	for (let i = 0; i < lines.length; i += 1) {
+		if (!lines[i].startsWith("not ok")) continue;
+		const name = lines[i].replace(/^not ok \d+ - /, "");
+		const detail = lines.slice(i, i + 14)
+			.map((line) => line.trim())
+			.find((line) => line.startsWith("error: '"));
+		failures.push(detail === undefined ? name : `${name} — ${detail.slice(8).replace(/'$/, "")}`);
+	}
+	return failures;
 }
 
 function rmSyncTempDirs() {

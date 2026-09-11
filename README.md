@@ -88,10 +88,17 @@ only the dock display and the new editing model are added.)
 
 ## Compatibility
 
-**Verified against DSH `0.1.5-rc.1`** (current `latest`) with the contract
-tests below. The browser half is composed at DSH **boot** from the profile's
-installed copy, so after installing or updating this package the profile must
-be restarted — a page reload is not enough.
+**Verified against DSH `0.1.5-rc.1` (current `latest`) and `0.1.5-rc.2`
+(`next`)** — the full contract suite passes against both. The browser half is
+composed at DSH **boot** from the profile's installed copy, so after installing
+or updating this package the profile must be restarted — a page reload is not
+enough.
+
+The `0.1.1-rc.1` line is out of range: it predates
+`@deepseek-ai/dsh-api-session-controller`, the package that now declares the
+session face and queue-row contracts this plugin is written against, so the
+matrix cannot evaluate it. The `0.1.1-rc.1` peer entries this repo used to
+declare are gone for the same reason.
 
 The plugin consumes only public client contracts, and every one of them is
 asserted against the installed DSH so a future update fails the tests loudly
