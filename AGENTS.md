@@ -36,15 +36,27 @@ packages:
   this is the source, not a build artifact — the bundle is hand-written).
 - `lib/types/*.d.ts` — hand-written declarations referenced by the exports
   map.
+- `test/contract.test.mjs` — contract tests against the installed DSH
+  (`npm test`), asserting each client contract the browser half consumes.
+- `tools/dsh-matrix.mjs` — the same checks across several DSH versions. It
+  lives outside `test/` because `node --test` treats every file under a test
+  directory as a test case.
 - `LICENSE` — MIT.
 - `AGENTS.md`, `README.md` — repo docs.
 
 ## Iterating on the plugin
 
-- Edit `lib/*` and `package.json` at the repo root, then re-sync the
-  installed copy under `~/.dsh/profiles/node_modules/queue-steer-button/`
-  (a profile restart is required for changes to apply — `dsh.client` package
-  metadata is cached per name and plugin-set changes take effect on restart).
+- Edit `lib/*` and `package.json` at the repo root, run `npm test`
+  (contract tests; they need a DSH install, auto-detected or via `DSH_ROOT`),
+  then re-sync the installed copy under
+  `~/.dsh/profiles/web/node_modules/queue-steer-button/` by re-running
+  `dsh plugin --profile web add git+https://github.com/lyuwen/dsh-steer-button`
+  (a profile restart is required for changes to apply — client bundles are
+  composed at DSH boot, so a page reload is not enough).
+- Any change to what the browser half reads from DSH (slot props, DOM markers,
+  `InputState` fields, session verbs) must update `test/contract.test.mjs` in
+  the same commit: the tests are two-sided, so they fail when DSH moves under
+  the plugin *and* when the plugin drops a fallback the installed DSH needs.
 - The canonical install path is the git URL
   `git+https://github.com/lyuwen/dsh-steer-button` (repo root is the package);
   a local path install (`dsh plugin --profile web add <repo-root>`) works the

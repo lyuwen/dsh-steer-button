@@ -82,7 +82,48 @@ only the dock display and the new editing model are added.)
   and the ↑ withdraw gesture, and calls the session face from the `sessions`
   client service.
 - `lib/types/*.d.ts` — hand-written declarations.
+- `test/contract.test.mjs` — contract tests against the installed DSH
+  (`npm test`); `tools/dsh-matrix.mjs` runs the same checks across versions.
 - `LICENSE` — MIT.
+
+## Compatibility
+
+**Verified against DSH `0.1.5-rc.1`** (current `latest`) with the contract
+tests below. The browser half is composed at DSH **boot** from the profile's
+installed copy, so after installing or updating this package the profile must
+be restarted — a page reload is not enough.
+
+The plugin consumes only public client contracts, and every one of them is
+asserted against the installed DSH so a future update fails the tests loudly
+instead of silently dropping the controls (which is exactly what DSH `0.1.5`
+did):
+
+| Contract | Why it matters |
+|---|---|
+| `conversation.input.right`, `conversation.input.dock` | where the controls and the queue strip render |
+| `useSession` / `useInput` standard slot props | Session lifecycle and draft state; `0.1.5` dropped the `InputZone` owner from the actions slot |
+| `InputState.draft` / `.phase` / `.attachmentIds` | what gates the three actions; `imageIds` was renamed in `0.1.5` and is still read as a fallback |
+| `[data-composer-card]`, `[data-composer-input]` | the composer card and its editor host; the editor was a `textarea` before `0.1.5` |
+| `SessionFace.prompt` / `.cancel` / `.updateQueue` | the three delivery modes and the strip row actions |
+| `QueuedMessage.placement` / `.preview` / `.text` | the strip rows (`queued` = turn end, `steering` = next step) |
+
+DSH client packages are supplied by the host at runtime, so none of them is
+declared as a peer dependency: the profile never installs them, and npm's
+prerelease rules cannot express a `0.1.x` prerelease range anyway.
+
+### Tests
+
+```sh
+npm test                                         # contract tests against the installed DSH
+DSH_ROOT=/path/to/@deepseek-ai/dsh npm test      # …against an explicit DSH
+node tools/dsh-matrix.mjs 0.1.5-rc.2 0.1.1-rc.1  # the same checks across versions
+```
+
+`test/contract.test.mjs` reads the DSH's own type declarations and composed
+client bundle — no browser, no network. `tools/dsh-matrix.mjs` installs each
+published version into a throwaway directory first, so it needs the network and
+belongs to an on-demand or nightly run; a version that fails there is outside
+the range claimed above, so either the claim or the code has to change.
 
 ## Install
 
@@ -116,15 +157,18 @@ plugin-set changes take effect only on restart.
 
 ### Current deployment state
 
-Already installed into the local `web` profile (dependency + bundle layer in
-`~/.dsh/profiles/web/package.json`, package at
-`~/.dsh/profiles/node_modules/queue-steer-button/`). A profile restart is the
-remaining step to activate it. After editing `lib/*` or `package.json`, re-sync
-the installed copy:
+Installed into the local `web` profile from the git URL — dependency and
+bundle layer in `~/.dsh/profiles/web/package.json`, package at
+`~/.dsh/profiles/web/node_modules/queue-steer-button/`. To move the profile to
+a new revision, re-run the install command (it re-resolves the dependency and
+re-pins `pnpm-lock.yaml`), then restart the profile:
 
 ```sh
-cp -r . ~/.dsh/profiles/node_modules/queue-steer-button/
+dsh plugin --profile web add git+https://github.com/lyuwen/dsh-steer-button
 ```
+
+Editing `lib/*` in this checkout does **not** affect the running profile until
+that install re-syncs the copy under `~/.dsh/profiles/web/node_modules/`.
 
 ## Verify
 
