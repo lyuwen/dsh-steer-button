@@ -68,12 +68,18 @@ packages:
   - Steer → `session.cancel()` then `session.prompt([…], "steer")` — the
     current step's LLM stream aborts, the partial output is preserved as an
     interrupted assistant message, then the new request continues.
-  - Escape → promotes every `queued` row to next-step delivery
-    (`updateQueue(id, { kind: "steer" })`, the native queue dock's Steer) and
-    then calls `session.cancel()`. Promotion comes first on purpose: steering
-    is only accepted while the agent is steerable, and the cancel closes that
-    window. `session/steer-unavailable` and `session/queue-item-not-found`
-    converge silently, exactly like the native accelerated-Enter steer.
+  - Escape → withdraws every pending row that has text
+    (`updateQueue(id, { kind: "remove" })`), calls `session.cancel()`, then
+    re-submits the withdrawn text with `session.prompt([…], "steer")`.
+    Withdrawing and re-submitting is the delivery — do not "simplify" it to
+    promoting in place: `session.cancel()` is
+    `agent.cancel(…, { keepInbox: true })`, so a pending row survives the stop
+    but the aborted turn never reaches the step boundary that would have
+    delivered it, and `updateQueue(id, { kind: "steer" })` + cancel strands the
+    message (observed). A row is re-submitted only when its removal succeeded,
+    so a row the agent already claimed is never duplicated, and an
+    attachment-only row (`text === null`) is left parked rather than dropped,
+    because `prompt` cannot carry its durable attachment references.
 - **Do not regress the UI contract**: buttons render only while the agent is
   running in the session (hidden in blank/new chats and removed sessions);
   shortcuts are platform-aware — ⌘+Return / ⌘+⇧+Return on macOS,

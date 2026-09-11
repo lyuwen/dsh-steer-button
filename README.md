@@ -10,7 +10,7 @@ strip above the text box.
 | **Queue** | `Enter` | `session.prompt([…], "steer")` | **Next agent step**: the current step finishes and commits its observation, then the message is sent **together with that observation** in the next LLM request. Nothing is interrupted. |
 | **Steer** | `⌘+Return` / `Ctrl+Enter` | `session.cancel()` then `session.prompt([…], "steer")` | The current step's LLM stream aborts; the partial output is preserved as an **interrupted assistant message**; the new request continues with your message. |
 | **Backlog** | `⌘+⇧+Return` / `Ctrl+Shift+Enter` | `session.prompt([…], "queue")` | DSH's **native queue**: waits for the whole turn to finish, then runs as its own turn. |
-| **Stop** | `Esc` | `session.cancel()` (plus a promotion per backlog row) | Stops the running agent — and if backlog rows are pending, promotes them to next-step delivery first, so they enter the context immediately and the turn continues with them. |
+| **Stop** | `Esc` | withdraw, `session.cancel()`, then `session.prompt([…], "steer")` | Stops the running agent, and delivers whatever was still pending in the queue as a steering prompt so the turn continues with it. |
 
 The controls replace the shipped behavior while the agent is busy:
 
@@ -36,13 +36,21 @@ never submitted by `Esc`.
 
 | Pending queue | What `Esc` does |
 |---|---|
-| no `turn end` rows | `session.cancel()` — the same call the Stop button makes |
-| one or more `turn end` rows | each row is promoted to next-step delivery (`updateQueue(id, {kind: "steer"})`, the native queue dock's Steer), **then** the current step is cancelled, so the messages enter the context immediately and the turn continues with them |
+| nothing | `session.cancel()` — the same call the Stop button makes |
+| one or more rows | each row is withdrawn (`updateQueue(id, {kind: "remove"})`), the current step is cancelled, and the withdrawn text is re-submitted as a steering prompt |
 
-Rows already marked **next step** need no promotion; `Esc` simply stops, which
-delivers them at the next boundary. Promotion happens before the cancel on
-purpose: steering is only accepted while the agent is steerable, and the cancel
-closes that window.
+**Why withdrawing and re-submitting, not promoting in place.** `session.cancel()`
+reaches `agent.cancel(…, { keepInbox: true })`: the inbox survives the stop, but
+the aborted turn never reaches the step boundary that would have delivered a
+pending **next step** row, so promoting `updateQueue(id, {kind: "steer"})` and
+cancelling leaves that row parked with nothing to wake it — it stops the agent
+and silently strands the message. Re-submitting the text *is* the wake, and it
+is the same delivery the **Steer** button gives the draft.
+
+The withdraw is careful: a row is re-submitted only if its removal succeeded, so
+a row the agent already claimed stays with the agent and is never duplicated. A
+row with no text projection (an attachment-only row) is left parked rather than
+dropped, because `prompt` cannot carry its durable attachment references back.
 
 `Esc` is deliberately polite about it: an open trigger menu, popup, inline
 editor, or dialog owns the key first, and a form field outside the composer

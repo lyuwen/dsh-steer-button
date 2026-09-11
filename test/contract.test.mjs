@@ -227,18 +227,38 @@ test("queue rows still project the fields the strip renders", { skip }, () => {
 
 test("the escape path still has the queue verbs and focus feed it needs", { skip }, () => {
 	const types = sessionTypes();
-	// Escape promotes `queued` rows to next-step delivery (kind 'steer') and the
-	// strip's Edit/Remove use kind 'remove'; both are mutations of one item.
+	// The strip's Remove/Escape-withdraw use kind 'remove'; the strip's Send
+	// promotes a row with kind 'steer'. Both mutate one queue item.
 	const action = typeAliasBody(types, "QueueAction");
 	assert.notEqual(action, "", "QueueAction is no longer declared in the session controller contract");
-	assert.match(action, /kind: 'steer'/, "QueueAction no longer accepts kind 'steer'; Escape cannot promote backlog rows");
-	assert.match(action, /kind: 'remove'/, "QueueAction no longer accepts kind 'remove'");
-	assert.match(source, /kind: "steer"/, "the plugin no longer promotes queue rows");
+	assert.match(action, /kind: 'remove'/, "QueueAction no longer accepts kind 'remove'; Escape cannot withdraw pending rows");
+	assert.match(action, /kind: 'steer'/, "QueueAction no longer accepts kind 'steer'; the strip's Send cannot promote a row");
 	assert.match(source, /kind: "remove"/, "the plugin no longer removes queue rows");
+	assert.match(source, /kind: "steer"/, "the plugin no longer promotes queue rows");
 	// Escape must act on the Session the workspace shows, and its `current` id is
 	// the only client-side source for that.
 	const list = interfaceBody(types, "SessionListState");
 	assert.notEqual(list, "", "SessionListState is no longer declared in the session controller contract");
 	assert.match(list, /\bcurrent\b/, "SessionListState no longer exposes current; the focus guard cannot tell background Sessions apart");
 	assert.match(source, /props\.useSessions\b/, "the escape guard no longer reads the current Session");
+});
+
+test("escape withdraws, stops, then delivers — in that order", { skip }, () => {
+	// The ordering is the fix for a real failure: `session.cancel()` is
+	// `agent.cancel(…, { keepInbox: true })`, so promoting a pending row and
+	// cancelling leaves it parked with nothing to wake the driver. Escape has to
+	// take the row out of the inbox and re-submit its text after the stop.
+	const start = source.indexOf("const runEscape");
+	assert.notEqual(start, -1, "runEscape is gone from the browser half");
+	const end = source.indexOf("\n\t\t\t}, []);", start);
+	const body = source.slice(start, end === -1 ? source.length : end);
+	const withdraw = body.indexOf("updateQueue(row.id, { kind: \"remove\" })");
+	const cancel = body.indexOf("face.cancel()");
+	const deliver = body.indexOf("face.prompt(");
+	assert.notEqual(withdraw, -1, "escape no longer withdraws pending rows");
+	assert.notEqual(cancel, -1, "escape no longer stops the agent");
+	assert.notEqual(deliver, -1, "escape no longer re-submits the withdrawn text; pending rows would be stranded by the cancel");
+	assert.ok(withdraw < cancel, "escape must withdraw before the cancel, or a claimed row could be delivered twice");
+	assert.ok(cancel < deliver, "escape must deliver after the cancel, so the text wakes the stopped driver");
+	assert.match(body.slice(deliver), /"steer"/, "escape must re-submit in steer mode; PromptMode changed");
 });
